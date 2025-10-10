@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Pathfinder with Ferry</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; }
+    canvas { border: 1px solid #444; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Map Pathfinder (with Ferry)</h1>
+  <input id="start" value="0,0" />
+  <input id="end" value="2,2" />
+  <button onclick="findPath()">Find Path</button>
+  <canvas id="mapCanvas" width="400" height="400"></canvas>
+  <script src="script.js"></script>
+</body>
+</html>

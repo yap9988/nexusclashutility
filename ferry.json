@@ -1,0 +1,12 @@
+[
+  { "origin": [4,34], "destination": [14,21], "cost": 3 },
+  { "origin": [4,34], "destination": [25,2], "cost": 6 },
+  { "origin": [14,21], "destination": [4,34], "cost": 3 },
+  { "origin": [14,21], "destination": [25,2], "cost": 3 },
+  { "origin": [25,2], "destination": [4,34], "cost": 6 },
+  { "origin": [25,2], "destination": [14,21], "cost": 3 },
+  { "origin": [54,14], "destination": [69,22], "cost": 3 },
+  { "origin": [55,49], "destination": [63,65], "cost": 3 },
+  { "origin": [63,65], "destination": [55,49], "cost": 3 },
+  { "origin": [69,22], "destination": [54,14], "cost": 3 }
+]
