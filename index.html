@@ -1,18 +1,56 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Pathfinder with Ferry</title>
-  <style>
-    body { font-family: sans-serif; text-align: center; }
-    canvas { border: 1px solid #444; margin-top: 10px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Map Path Finder</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    padding: 20px;
+    background: #f2f2f2;
+  }
+  canvas {
+    border: 2px solid #444;
+    margin-top: 10px;
+    background: white;
+  }
+  input {
+    width: 50px;
+    margin: 2px;
+    text-align: center;
+  }
+  #result {
+    font-weight: bold;
+    margin-top: 10px;
+  }
+  #pathDisplay {
+    margin-top: 8px;
+    padding: 6px;
+    background: #f8f8f8;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+    white-space: pre-wrap;
+  }
+</style>
 </head>
 <body>
-  <h1>Map Pathfinder (with Ferry)</h1>
-  <input id="start" value="0,0" />
-  <input id="end" value="2,2" />
-  <button onclick="findPath()">Find Path</button>
-  <canvas id="mapCanvas" width="400" height="400"></canvas>
-  <script src="script.js"></script>
+
+<h2>🗺️ Path Finder</h2>
+
+<label>Start X:</label><input id="startX" type="number" value="0">
+<label>Y:</label><input id="startY" type="number" value="0"><br>
+<label>End X:</label><input id="endX" type="number" value="2">
+<label>Y:</label><input id="endY" type="number" value="2"><br>
+<button id="findPath">Find Path</button>
+
+<div id="result"></div>
+<div id="pathDisplay"></div>
+
+<canvas id="mapCanvas" width="400" height="400"></canvas>
+
+<script src="script.js"></script>
 </body>
 </html>
