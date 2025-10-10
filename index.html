@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,18 +7,17 @@
 <style>
   body {
     font-family: Arial, sans-serif;
+    background: #f2f2f2;
     text-align: center;
     padding: 20px;
-    background: #f2f2f2;
   }
   canvas {
-    border: 2px solid #444;
+    border: 2px solid #333;
     margin-top: 10px;
-    background: white;
+    background: #fff;
   }
   input {
     width: 50px;
-    margin: 2px;
     text-align: center;
   }
   #result {
@@ -26,30 +25,34 @@
     margin-top: 10px;
   }
   #pathDisplay {
-    margin-top: 8px;
-    padding: 6px;
+    margin-top: 10px;
+    padding: 8px;
     background: #f8f8f8;
     border-radius: 8px;
     border: 1px solid #ccc;
-    font-size: 14px;
+    font-family: monospace;
     white-space: pre-wrap;
   }
 </style>
 </head>
 <body>
 
-<h2>🗺️ Path Finder</h2>
+<h2>🗺️ Map Path Finder</h2>
 
-<label>Start X:</label><input id="startX" type="number" value="0">
-<label>Y:</label><input id="startY" type="number" value="0"><br>
-<label>End X:</label><input id="endX" type="number" value="2">
-<label>Y:</label><input id="endY" type="number" value="2"><br>
-<button id="findPath">Find Path</button>
+<div>
+  <label>Start X:</label><input id="startX" type="number" value="0">
+  <label>Y:</label><input id="startY" type="number" value="0">
+  <br>
+  <label>End X:</label><input id="endX" type="number" value="2">
+  <label>Y:</label><input id="endY" type="number" value="2">
+  <br><br>
+  <button id="findPath">Find Path</button>
+</div>
 
 <div id="result"></div>
 <div id="pathDisplay"></div>
 
-<canvas id="mapCanvas" width="400" height="400"></canvas>
+<canvas id="mapCanvas" width="500" height="500"></canvas>
 
 <script src="script.js"></script>
 </body>
