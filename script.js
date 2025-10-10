@@ -151,7 +151,8 @@ function shortestPath(map, ferries, start, end){
       if(Array.isArray(f.origin) && f.origin[0] === x && f.origin[1] === y){
         const nx = f.destination[0], ny = f.destination[1];
         if(!inBounds(nx,ny,cols,rows)) continue;
-        const newCost = d + (Number(f.cost) || 0);
+        const ferryCost = Number(f.cost) || 0;
+        const newCost = d + ferryCost; // ferry replaces tile step cost
         if(newCost < dist[ny][nx]){
           dist[ny][nx] = newCost;
           prev[ny][nx] = [x,y];
