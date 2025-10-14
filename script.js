@@ -32,8 +32,8 @@ function normalizeFerries(raw){
     // Case 1: already in desired shape: { origin: [x,y], destination: [x,y], cost: n }
     if(Array.isArray(f.origin) && Array.isArray(f.destination)){
       out.push({
-        origin: [intOrZero(f.origin[0]), intOrZero(f.origin[1])],
-        destination: [intOrZero(f.destination[0]), intOrZero(f.destination[1])],
+        origin: [intOrZero(f.origin[0] - 1), intOrZero(f.origin[1]) - 1],
+        destination: [intOrZero(f.destination[0] - 1), intOrZero(f.destination[1]) - 1],
         cost: intOrZero(f.cost ?? f.c ?? f["cost required"] ?? f["costrequired"])
       });
       continue;
@@ -48,8 +48,8 @@ function normalizeFerries(raw){
 
     if(ox !== undefined && oy !== undefined && dx !== undefined && dy !== undefined){
       out.push({
-        origin: [intOrZero(ox), intOrZero(oy)],
-        destination: [intOrZero(dx), intOrZero(dy)],
+        origin: [intOrZero(ox) - 1, intOrZero(oy) - 1],
+        destination: [intOrZero(dx) - 1, intOrZero(dy) - 1],
         cost: intOrZero(cost)
       });
       continue;
@@ -270,10 +270,10 @@ document.getElementById("findPath").addEventListener("click", ()=>{
     alert("Map not loaded yet.");
     return;
   }
-  const sx = Number(document.getElementById("startX").value);
-  const sy = Number(document.getElementById("startY").value);
-  const ex = Number(document.getElementById("endX").value);
-  const ey = Number(document.getElementById("endY").value);
+  const sx = Number(document.getElementById("startX").value) - 1;
+  const sy = Number(document.getElementById("startY").value) - 1;
+  const ex = Number(document.getElementById("endX").value) - 1;
+  const ey = Number(document.getElementById("endY").value) - 1;
 
   if(!Number.isFinite(sx) || !Number.isFinite(sy) || !Number.isFinite(ex) || !Number.isFinite(ey)){
     alert("Start / End must be valid numbers.");
