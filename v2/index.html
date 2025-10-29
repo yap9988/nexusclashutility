@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Insurance Rules Validator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-6">
+  <div class="bg-white rounded-2xl shadow-lg w-full max-w-3xl p-6 space-y-4">
+    <h1 class="text-2xl font-bold text-center mb-4">Insurance Rules Validator</h1>
+
+    <!-- Has Existing Cover -->
+    <div>
+      <label class="inline-flex items-center space-x-2">
+        <input id="hasExistingCover" type="checkbox" class="w-5 h-5 text-blue-600" />
+        <span>Has Existing Cover</span>
+      </label>
+    </div>
+
+    <!-- Previous and Current Codes -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="block font-semibold mb-1">Previous Codes</label>
+        <textarea id="previousCodes" rows="4" class="w-full border rounded-lg p-2" placeholder="One per line..."></textarea>
+      </div>
+      <div>
+        <label class="block font-semibold mb-1">Current Codes</label>
+        <textarea id="currentCodes" rows="4" class="w-full border rounded-lg p-2" placeholder="One per line..."></textarea>
+      </div>
+    </div>
+
+    <!-- Days Apart -->
+    <div>
+      <label class="block font-semibold mb-1">Days Apart Between Previous and Current</label>
+      <input id="daysApart" type="number" class="border rounded-lg p-2 w-full" placeholder="e.g. 365" />
+    </div>
+
+    <!-- File Upload -->
+    <div>
+      <label class="block font-semibold mb-1">Upload Rules (TXT)</label>
+      <input id="rulesFile" type="file" accept=".txt" class="border rounded-lg p-2 w-full" />
+    </div>
+
+    <!-- Button -->
+    <div class="text-center">
+      <button id="validateBtn" class="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition">Validate</button>
+    </div>
+
+    <!-- Results -->
+    <div id="resultContainer" class="hidden">
+      <h2 class="text-xl font-bold mt-4">Result</h2>
+      <p id="resultText" class="text-lg font-semibold mt-2"></p>
+
+      <h3 class="text-lg font-bold mt-4">Codes</h3>
+      <pre id="codesText" class="bg-gray-100 p-3 rounded-lg overflow-x-auto"></pre>
+    </div>
+  </div>
+
+  <script>
+    // Helper to parse a code string
+    function parseCode(code) {
+      const parts = code.trim().split("-");
+      if (parts.length < 7) return null;
+      return {
+        type: parts[0],
+        familyId: parts[3],
+        amount: parseFloat(parts[6]) || 0,
+        product: parts[7],
+        suffix: parts[8]
+      };
+    }
+
+    // Compare helpers
+    function sumLoadings(codes, prefix) {
+      return codes
+        .filter(c => c && c.type.startsWith(prefix))
+        .reduce((a, c) => a + (c.amount || 0), 0);
+    }
+    function countType(codes, type) {
+      return codes.filter(c => c && c.type === type).length;
+    }
+    function diffCodes(prev, curr, type) {
+      const prevCodes = prev.filter(c => c.type === type).map(c => c.familyId);
+      const currCodes = curr.filter(c => c.type === type).map(c => c.familyId);
+      return prevCodes.some(f => !currCodes.includes(f));
+    }
+
+    document.getElementById("validateBtn").addEventListener("click", async () => {
+      const hasCover = document.getElementById("hasExistingCover").checked;
+      const prevRaw = document.getElementById("previousCodes").value.trim().split("\n").filter(Boolean);
+      const currRaw = document.getElementById("currentCodes").value.trim().split("\n").filter(Boolean);
+      const daysApart = parseInt(document.getElementById("daysApart").value) || 0;
+      const fileInput = document.getElementById("rulesFile");
+
+      if (!hasCover) {
+        document.getElementById("resultContainer").classList.remove("hidden");
+        document.getElementById("resultText").textContent = "Accepted (no existing cover)";
+        document.getElementById("codesText").textContent = "—";
+        return;
+      }
+
+      if (fileInput.files.length === 0) {
+        alert("Please upload a rules TXT file.");
+        return;
+      }
+
+      const rulesText = await fileInput.files[0].text();
+
+      // Parse codes
+      const prevCodes = prevRaw.map(parseCode).filter(Boolean);
+      const currCodes = currRaw.map(parseCode).filter(Boolean);
+
+      // Compute stats
+      const PreviousLoading = sumLoadings(prevCodes, "LD");
+      const CurrentLoading = sumLoadings(currCodes, "LD");
+      const PreviousCountExclude = countType(prevCodes, "EMC");
+      const CurrentCountExclude = countType(currCodes, "EMC");
+      const PreviousPerMillion = sumLoadings(prevCodes, "LD1");
+      const CurrentPerMillion = sumLoadings(currCodes, "LD1");
+
+      const HasDifferentLoadCodes = diffCodes(prevCodes, currCodes, "LD");
+      const HasDifferentLoad1Codes = diffCodes(prevCodes, currCodes, "LD1");
+      const HasDifferentEMCCodes = diffCodes(prevCodes, currCodes, "EMC");
+
+      const variables = {
+        DateCreated: daysApart,
+        PreviousLoading,
+        CurrentLoading,
+        PreviousCountExclude,
+        CurrentCountExclude,
+        PreviousPerMillion,
+        CurrentPerMillion,
+        HasDifferentLoadCodes,
+        HasDifferentLoad1Codes,
+        HasDifferentEMCCodes,
+      };
+
+      // Evaluate rules
+      const lines = rulesText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const hits = [];
+
+      for (let line of lines) {
+        if (!line.startsWith("ANSWER")) continue;
+
+        const parts = line.split(/\s+/);
+        const action = parts[4];
+        if (action === "CustomData") {
+          const field = parts[5];
+          const op = parts[6];
+          const val = parts[7];
+          if (field === "HasExistingCover" && (hasCover !== (val === "True"))) hits.push(line);
+        } else if (action === "Math") {
+          const op = parts[5];
+          const expr = parts[6].split("-");
+          const leftVar = expr[0];
+          const rightVar = expr[1];
+          const num = parseFloat(parts[7]);
+          const diff = variables[leftVar] - variables[rightVar];
+          if ((op === "GT" && diff <= num) ||
+              (op === "GTE" && diff < num) ||
+              (op === "LT" && diff >= num) ||
+              (op === "LTE" && diff > num) ||
+              (op === "EQ" && diff !== num)) {
+            hits.push(line);
+          }
+        }
+      }
+
+      // Determine result
+      let result = "Accepted";
+      if (hits.length > 0) {
+        result = "ModifiedDeclaration";
+        if (hits.some(h => h.includes("Decline"))) result = "Decline";
+      }
+
+      // Prepare codes diff
+      const codesOutput = {
+        LOAD_LD: prevCodes.filter(c => c.type === "LD" && !currCodes.some(cc => cc.familyId === c.familyId)).map(c => c.familyId),
+        EMC: prevCodes.filter(c => c.type === "EMC" && !currCodes.some(cc => cc.familyId === c.familyId)).map(c => c.familyId),
+        LOAD1_LD1: prevCodes.filter(c => c.type === "LD1" && !currCodes.some(cc => cc.familyId === c.familyId)).map(c => c.familyId),
+      };
+
+      // Display results
+      document.getElementById("resultContainer").classList.remove("hidden");
+      document.getElementById("resultText").textContent = result;
+      document.getElementById("codesText").textContent = JSON.stringify(codesOutput, null, 2);
+    });
+  </script>
+</body>
+</html>
