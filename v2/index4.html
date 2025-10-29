@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Coverage Validation Tool — Corrected</title>
+<style>
+  body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:#f7fafc; margin:0; padding:28px; color:#0f172a; }
+  .card { max-width:920px; margin:0 auto; background:white; padding:20px; border-radius:12px; box-shadow:0 6px 20px rgba(2,6,23,0.06); }
+  h1 { margin:0 0 8px 0; font-size:20px; }
+  label { display:block; margin-top:12px; font-weight:600; }
+  textarea, input[type="number"], input[type="text"] { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #d1d5db; margin-top:6px; font-size:14px; box-sizing:border-box; }
+  .row { display:flex; gap:12px; align-items:center; }
+  button { background:#2563eb; color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; margin-top:14px; font-weight:600; }
+  pre { background:#0f172a10; padding:12px; border-radius:8px; margin-top:14px; white-space:pre-wrap; word-break:break-word; }
+  .small { font-size:13px; color:#475569; margin-top:6px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Coverage Validation Tool — Corrected</h1>
+    <div class="small">Enter codes (one per line or comma-separated). Example code format: <code>LD-GEN-A1021-1021-E-50-LIFE-AUDT</code></div>
+
+    <label><input id="hasCover" type="checkbox" /> Has Existing Cover</label>
+
+    <label>Previous Codes:</label>
+    <textarea id="prevCodes" rows="5" placeholder="Enter previous codes, separated by newline or comma"></textarea>
+
+    <label>Current Codes:</label>
+    <textarea id="currCodes" rows="5" placeholder="Enter current codes, separated by newline or comma"></textarea>
+
+    <label>Days Apart:</label>
+    <input id="daysApart" type="number" placeholder="e.g. 500" />
+
+    <div style="margin-top:10px;">
+      <button onclick="validate()">Validate</button>
+    </div>
+
+    <pre id="output">{ result: "...", codes: { LOAD:[], EMC:[], LOAD1:[] } }</pre>
+  </div>
+
+<script>
+/*
+  Parsing assumptions:
+  - Code format: TYPE - GEN - Axxxx - familyID - pathcode - amount - product - nature
+    e.g. LD-GEN-A1021-1021-E-50-LIFE-AUDT
+  - TYPE is exactly "LD", "EMC", or "LD1" (we compare exact equality)
+  - familyID is parts[3]
+  - amount is parts[5] (numeric). For EMC, amount is usually 1 but we still parse.
+  - nature is parts[7] (like AUDT or OCCU)
+*/
+
+function parseCodes(input) {
+  if (!input) return [];
+  return input
+    .split(/[\n,]+/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(full => {
+      const parts = full.split("-").map(p => p.trim());
+      return {
+        full,
+        type: (parts[0] || "").toUpperCase(),
+        family: (parts[3] || "").toUpperCase(),
+        amount: Number(parts[5] ?? 0) || 0,
+        nature: (parts[7] || "").toUpperCase()
+      };
+    });
+}
+
+function sumExactType(codes, exactType) {
+  return codes.filter(c => c.type === exactType).reduce((s,c) => s + (isNaN(c.amount) ? 0 : c.amount), 0);
+}
+
+function countExactType(codes, exactType) {
+  return codes.filter(c => c.type === exactType).length;
+}
+
+function missingByType(prev, curr, exactType) {
+  return prev
+    .filter(p => p.type === exactType)
+    .filter(p => !curr.some(c => c.type === exactType && c.family === p.family))
+    .map(p => p.full);
+}
+
+function reducedLoadCodes(prev, curr) {
+  // For LD (exact), find previous LD codes where current either doesn't have same family LD
+  // or has same family but amount is less
+  const missing = [];
+  prev.filter(p => p.type === "LD").forEach(p => {
+    const match = curr.find(c => c.type === "LD" && c.family === p.family);
+    if (!match) missing.push(p.full);
+    else if (match.amount < p.amount) missing.push(p.full);
+  });
+  return missing;
+}
+
+function hasNatureAny(codesList, naturesArray) {
+  // codesList: array of arrays [prev, curr] or combined array
+  if (!Array.isArray(codesList)) return false;
+  const arr = Array.isArray(codesList[0]) ? [...codesList[0], ...(codesList[1]||[])] : codesList;
+  return arr.some(c => naturesArray.includes((c.nature||"").toUpperCase()));
+}
+
+function validate() {
+  const hasCover = document.getElementById("hasCover").checked;
+  const prev = parseCodes(document.getElementById("prevCodes").value);
+  const curr = parseCodes(document.getElementById("currCodes").value);
+  const daysApart = Number(document.getElementById("daysApart").value || 0);
+
+  // If no existing cover, immediate Accepted
+  if (!hasCover) {
+    document.getElementById("output").textContent = JSON.stringify({ result: "Accepted", codes: { LOAD: [], EMC: [], LOAD1: [] } }, null, 2);
+    return;
+  }
+
+  // Determine natures (check if AUDT or OCCU present in either previous or current)
+  const hasAUDT = hasNatureAny([prev, curr], ["AUDT"]);
+  const hasAUDTorOCCU = hasNatureAny([prev, curr], ["AUDT", "OCCU"]);
+
+  // Totals — only exact LD counts for Total LOAD (LD1 is separate)
+  const totalPrevLoad = sumExactType(prev, "LD");
+  const totalCurrLoad = sumExactType(curr, "LD");
+  const loadDiff = totalPrevLoad - totalCurrLoad;
+
+  // EMC counts
+  const prevEMCcount = countExactType(prev, "EMC");
+  const currEMCcount = countExactType(curr, "EMC");
+  const emcDiff = prevEMCcount - currEMCcount;
+
+  // Missing / reduced codes
+  const ld1Missing = missingByType(prev, curr, "LD1"); // previous LD1 that current doesn't have
+  const emcMissing = missingByType(prev, curr, "EMC");
+  const loadMissing = reducedLoadCodes(prev, curr); // LD previous missing or reduced in current
+
+  // Default
+  let result = "Accepted";
+
+  // Apply rules in priority order (Decline rules first)
+  // Rule #1
+  if (hasAUDTorOCCU && loadDiff > 50 && daysApart <= 1095) {
+    result = "Decline";
+  }
+  // Rule #2
+  else if (hasAUDT && emcDiff > 1 && daysApart <= 1825) {
+    result = "Decline";
+  }
+  // Rule #3
+  else if (hasAUDTorOCCU && ld1Missing.length > 0 && daysApart <= 1825) {
+    result = "Decline";
+  }
+  // Rule #4
+  else if (hasAUDTorOCCU && ld1Missing.length > 0 && daysApart > 1825) {
+    result = "ModifiedDeclaration";
+  }
+  // Rule #5
+  else if (hasAUDTorOCCU && loadDiff > 50 && daysApart > 1095) {
+    result = "ModifiedDeclaration";
+  }
+  // Rule #6
+  else if (hasAUDT && emcDiff > 1 && daysApart > 1825) {
+    result = "ModifiedDeclaration";
+  }
+  // Rule #7
+  else if (hasAUDT && emcDiff === 1) {
+    result = "ModifiedDeclaration";
+  }
+  // Rule #8 (only when loadDiff > 0)
+  else if (hasAUDTorOCCU && loadDiff > 0 && loadDiff <= 50) {
+    result = "ModifiedDeclaration";
+  }
+  // Rule #9
+  else if (hasAUDTorOCCU && loadMissing.length > 0) {
+    result = "ModifiedDeclaration";
+  } else {
+    result = "Accepted";
+  }
+
+  const codes = {
+    LOAD: loadMissing,
+    EMC: emcMissing,
+    LOAD1: ld1Missing
+  };
+
+  document.getElementById("output").textContent = JSON.stringify({ result, codes, debug: { totalPrevLoad, totalCurrLoad, loadDiff, prevEMCcount, currEMCcount, emcDiff, ld1MissingCount: ld1Missing.length } }, null, 2);
+}
+</script>
+</body>
+</html>
