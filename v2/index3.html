@@ -82,7 +82,7 @@ function validate() {
     return;
   }
 
-  const nature = (curr[0]?.nature || "").toUpperCase(); // assume current nature as reference
+  const nature = (curr[0]?.nature || prev[0]?.nature || "").toUpperCase(); // assume current nature as reference
   const totalPrevLoad = sumLoad(prev, "LD");
   const totalCurrLoad = sumLoad(curr, "LD");
   const loadDiff = totalPrevLoad - totalCurrLoad;
