@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coverage Validation Tool</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 p-6">
+  <div class="max-w-3xl mx-auto bg-white shadow-xl rounded-2xl p-6 space-y-6">
+    <h1 class="text-2xl font-bold text-center">Coverage Validation Tool</h1>
+
+    <!-- HasExistingCover -->
+    <label class="flex items-center space-x-2">
+      <input id="hasCover" type="checkbox" class="w-5 h-5">
+      <span>Has Existing Cover</span>
+    </label>
+
+    <!-- Code Inputs -->
+    <div>
+      <label class="block font-semibold mb-1">Previous Codes (comma or newline separated):</label>
+      <textarea id="prevCodes" class="w-full border rounded p-2 h-24"></textarea>
+    </div>
+
+    <div>
+      <label class="block font-semibold mb-1">Current Codes (comma or newline separated):</label>
+      <textarea id="currCodes" class="w-full border rounded p-2 h-24"></textarea>
+    </div>
+
+    <!-- Days Apart -->
+    <div>
+      <label class="block font-semibold mb-1">Days Apart (integer):</label>
+      <input id="daysApart" type="number" class="border rounded p-2 w-full" placeholder="e.g. 500">
+    </div>
+
+    <!-- File Upload -->
+    <div>
+      <label class="block font-semibold mb-1">Upload TXT Rules File:</label>
+      <input id="rulesFile" type="file" accept=".txt" class="border p-2 w-full">
+    </div>
+
+    <!-- Button -->
+    <button id="runBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+      Run Validation
+    </button>
+
+    <!-- Output -->
+    <div id="output" class="bg-gray-100 rounded p-4 font-mono text-sm whitespace-pre-wrap"></div>
+  </div>
+
+  <script>
+    document.getElementById('runBtn').addEventListener('click', async () => {
+      const hasCover = document.getElementById('hasCover').checked;
+      const prevCodes = document.getElementById('prevCodes').value.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+      const currCodes = document.getElementById('currCodes').value.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+      const daysApart = parseInt(document.getElementById('daysApart').value);
+      const file = document.getElementById('rulesFile').files[0];
+      const output = document.getElementById('output');
+      output.textContent = "Processing...";
+
+      if (!file) {
+        output.textContent = "Please upload a TXT rules file.";
+        return;
+      }
+
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const answers = lines.filter(l => l.startsWith("ANSWER")).map(parseAnswerLine);
+      const scenarios = lines.filter(l => l.startsWith("SCENARIO")).map(parseScenarioLine);
+
+      // --- Helper functions ---
+      function parseAnswerLine(line) {
+        const parts = line.split(/\s+/);
+        return {
+          ruleId: parts[1],
+          stepId: parts[2],
+          type: parts[4] || "",
+          operator: parts[5] || "",
+          left: parts[6] || "",
+          right: parts[7] || "",
+          value: parts[8] || ""
+        };
+      }
+
+      function parseScenarioLine(line) {
+        const parts = line.split(/\s+/);
+        return {
+          ruleId: parts[1],
+          stepId: parts[2],
+          result: parts[3],
+          label: parts[4]
+        };
+      }
+
+      // --- Core calculations ---
+      function parseCode(code) {
+        const parts = code.split("-");
+        return {
+          prefix: parts[0] || "",
+          family: parts[3] || "",
+          amount: parseFloat(parts[6]) || 0,
+          type: parts[7] || "",
+          suffix: parts[8] || ""
+        };
+      }
+
+      const prevObjs = prevCodes.map(parseCode);
+      const currObjs = currCodes.map(parseCode);
+
+      const sumBy = (arr, key) => arr.reduce((a,b) => a + (b[key] || 0), 0);
+      const countType = (arr, prefix) => arr.filter(c => c.prefix === prefix).length;
+
+      const stats = {
+        DateCreated: daysApart,
+        PreviousLoading: sumBy(prevObjs.filter(c => c.prefix.startsWith("LD")), "amount"),
+        CurrentLoading: sumBy(currObjs.filter(c => c.prefix.startsWith("LD")), "amount"),
+        PreviousCountExclude: countType(prevObjs, "EMC"),
+        CurrentCountExclude: countType(currObjs, "EMC"),
+        PreviousPerMillion: sumBy(prevObjs.filter(c => c.prefix.startsWith("LD1")), "amount"),
+        CurrentPerMillion: sumBy(currObjs.filter(c => c.prefix.startsWith("LD1")), "amount"),
+        HasExistingCover: hasCover
+      };
+
+      function hasDifferent(prev, curr, prefixFilter) {
+        const prevCodesFiltered = prev.filter(c => c.prefix.startsWith(prefixFilter));
+        const currCodesFiltered = curr.filter(c => c.prefix.startsWith(prefixFilter));
+        return prevCodesFiltered.some(p => {
+          const match = currCodesFiltered.find(c => c.family === p.family);
+          return !match || c.amount < p.amount;
+        });
+      }
+
+      stats.HasDifferentLoadCodes = hasDifferent(prevObjs, currObjs, "LD");
+      stats.HasDifferentLoad1Codes = hasDifferent(prevObjs, currObjs, "LD1");
+      stats.HasDifferentEMCCodes = hasDifferent(prevObjs, currObjs, "EMC");
+
+      // --- Evaluate rules ---
+      const triggered = [];
+      for (const ans of answers) {
+        if (ans.type === "CustomData") {
+          if (ans.operator === "EQ" && String(stats[ans.right]) !== ans.value)
+            triggered.push(ans);
+        } else if (ans.type === "Math") {
+          const [leftExp, rightExp] = ans.left.split("-");
+          const leftVal = stats[leftExp.trim()] - stats[rightExp.trim()];
+          const target = parseFloat(ans.value);
+          if (!compare(ans.operator, leftVal, target))
+            triggered.push(ans);
+        } else if (ans.type === "ApplicantDateCompare") {
+          if (!compare(ans.operator, stats.DateCreated, parseFloat(ans.value)))
+            triggered.push(ans);
+        } else if (ans.type === "ComparePrevious" && ans.operator === "EQ") {
+          if (String(stats[ans.left]) !== ans.value)
+            triggered.push(ans);
+        }
+      }
+
+      // Determine final result
+      const hitSteps = new Set(triggered.map(t => t.stepId));
+      const hitScenarios = scenarios.filter(s => hitSteps.has(s.stepId));
+      const finalResult = hitScenarios.length ? hitScenarios[0].label : "Accepted";
+
+      // Missing codes for output
+      const missing = {
+        MissingLoadCodes: prevObjs.filter(p => !currObjs.some(c => c.family === p.family && c.prefix.startsWith("LD"))),
+        MissingEMCCodes: prevObjs.filter(p => !currObjs.some(c => c.family === p.family && c.prefix === "EMC")),
+        MissingLoad1Codes: prevObjs.filter(p => !currObjs.some(c => c.family === p.family && c.prefix.startsWith("LD1")))
+      };
+
+      output.textContent = JSON.stringify({
+        result: finalResult,
+        triggeredRules: triggered,
+        stats,
+        missingCodes: missing
+      }, null, 2);
+    });
+
+    function compare(op, a, b) {
+      switch (op) {
+        case "GT": return a > b;
+        case "GTE": return a >= b;
+        case "LT": return a < b;
+        case "LTE": return a <= b;
+        case "EQ": return a == b;
+        default: return true;
+      }
+    }
+  </script>
+</body>
+</html>
