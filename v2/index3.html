@@ -101,8 +101,9 @@ function validate() {
   else if (["AUDT","OCCU"].includes(nature) && loadDiff > 50 && daysApart > 1095) result = "ModifiedDeclaration";
   else if (nature === "AUDT" && emcDiff > 1 && daysApart > 1825) result = "ModifiedDeclaration";
   else if (nature === "AUDT" && emcDiff === 1) result = "ModifiedDeclaration";
-  else if (["AUDT","OCCU"].includes(nature) && loadDiff >= 0 && loadDiff <= 50) result = "ModifiedDeclaration";
+  else if (["AUDT","OCCU"].includes(nature) && loadDiff > 0 && loadDiff <= 50) result = "ModifiedDeclaration";
   else if (["AUDT","OCCU"].includes(nature) && loadMissing.length > 0) result = "ModifiedDeclaration";
+  else result = "Accepted";
 
   const codes = {
     LOAD: loadMissing.map(c => c.full),
